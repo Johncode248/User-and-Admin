@@ -22,7 +22,7 @@ func login_Admin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if admin_decode.Name == admin.Name && admin_decode.Password == admin.Password {
-		json.NewEncoder(w).Encode(r.Body)
+		//json.NewEncoder(w).Encode(r.Body)  Empty JSON
 		CreateTokenHandler(w, r, admin_decode)
 	} else {
 		http.Error(w, "wrong name or password", http.StatusBadRequest)
