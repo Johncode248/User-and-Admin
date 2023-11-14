@@ -21,7 +21,7 @@ func main() {
 
 	// User functions
 	r.HandleFunc("/create_account", createAccount).Methods("POST")
-	r.HandleFunc("/login/user", loginUser).Methods("POST")
+	r.HandleFunc("/start/login/user", loginUser).Methods("POST")
 	r.HandleFunc("/login/user", getInfoUser).Methods("GET")
 	r.HandleFunc("/update/user", updateUser).Methods("PUT")
 	// Admin functions
