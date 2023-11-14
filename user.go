@@ -1,14 +1,15 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
+
 
 func createAccount(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -18,22 +19,29 @@ func createAccount(w http.ResponseWriter, r *http.Request) {
 	defer db.Close()
 
 	user_instance := &User{
-
 		Updated_at: time.Now().Add(-24 * time.Hour),
 	}
 	// Decoding request
 	_ = json.NewDecoder(r.Body).Decode(&user_instance)
 
-	//Inserting into database
-	_, err := db.Model(user_instance).Insert()
+	// converting password for database
+	hashedPassword, err := hashPassword(user_instance.Password)
 	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	user_instance.Password = hashedPassword
+	
+	//Inserting into database
+	_, errInsert := db.Model(user_instance).Insert()
+	if errInsert != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
 	// Returning json
 	json.NewEncoder(w).Encode(user_instance)
-	//10 users maximum
 
 }
 
@@ -55,6 +63,7 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Incorrect password or name", http.StatusBadRequest)
 	}
+	/*
 	if user_decode.Name == user.Name && user_decode.Password == user.Password {
 		json.NewEncoder(w).Encode(r.Body)
 		CreateTokenHandler_user(w, r, user_decode)
@@ -62,6 +71,12 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Decoding error, data mismatch", http.StatusBadRequest)
 		return
 	}
+        */
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(user_decode.Password)); err != nil {
+		http.Error(w, "Incorrect password or name", http.StatusBadRequest)
+		return
+	}
+	CreateTokenHandler_user(w, r, user_decode)
 }
 
 func getInfoUser(w http.ResponseWriter, r *http.Request) {
@@ -79,10 +94,20 @@ func getInfoUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Returning json
-		json.NewEncoder(w).Encode(user.Name)
-		json.NewEncoder(w).Encode(user.Surname)
-		json.NewEncoder(w).Encode(user.Date_birth)
+		
+		//json.NewEncoder(w).Encode(user.Name)
+		//json.NewEncoder(w).Encode(user.Surname)
+		//json.NewEncoder(w).Encode(user.Date_birth)   NOT JSON
+		userInfo := map[string]interface{}{
+			"name":       user.Name,
+			"surname":    user.Surname,
+			"date_birth": user.Date_birth,
+		}
+		// Returning JSON
+		if err := json.NewEncoder(w).Encode(userInfo); err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	} else {
 		http.Error(w, "invalid token", http.StatusBadRequest)
 	}
@@ -122,7 +147,19 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Returning user information
-		json.NewEncoder(w).Encode(user)
+		//json.NewEncoder(w).Encode(user) NOT JSON
+		userInfo := map[string]interface{}{
+			"name":       user.Name,
+			"surname":    user.Surname,
+			"date_birth": user.Date_birth,
+			"email":      user.Email,
+			"password":   user.Password,
+		}
+		// Returning JSON
+		if err := json.NewEncoder(w).Encode(userInfo); err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }
 func countUsers(db *sql.DB, table string) (int, error) {
@@ -130,4 +167,12 @@ func countUsers(db *sql.DB, table string) (int, error) {
 	row := db.QueryRow("SELECT COUNT(*) FROM " + table)
 	err := row.Scan(&count)
 	return count, err
+}
+
+func hashPassword(password string) (string, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedPassword), nil
 }
